@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <dirent.h>
 
 char* getDirString(int *len);
 int lookup_and_connect(const char *host, const char *service, const char * peerid);
@@ -93,9 +94,10 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
           strcat(msg,stringid); //append id 
           if (send(s,msg, 5, 0) < 0)
           {
+            free(msg); 
             return -1; 
           }
-          free msg; 
+          free(msg); 
           msg = NULL; 
         }
         //else do nothing if already joined
@@ -124,8 +126,10 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
           msg[size-1] = '\0'; 
           if (send(s,msg,size, 0) < 0)
           {
+            free(msg); 
             return -1; 
           }
+          free(msg); 
         }
         // nothing happens if not joined
       }
@@ -143,12 +147,12 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
 
 char* getDirString(int * len){
   DIR *d = opendir("SharedFiles");
-  char final[2000];
+  char* final = malloc( sizeof(char) * (  2000 ));
   struct dirent *dir;
   if(d){
     while((dir = readdir(d)) != NULL){
       if(dir-> d_type != DT_DIR){
-        len = (int)strlen(dir->d_name) +1; 
+        *len = *len + (int)strlen(dir->d_name) +1; 
         strcat(final, dir->d_name);
         strcat(final,"\0");
       }
