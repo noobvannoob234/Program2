@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <ctype.h>
 
-char* getDirString();
+char* getDirString(int *len);
 int lookup_and_connect(const char *host, const char *service, const char * peerid);
 int main( int argc, char *argv[] )
 {
@@ -141,16 +141,14 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
 }
 
 
-char* getDirString(){
-  if (!joined)
-    return -1;
+char* getDirString(int * len){
   DIR *d = opendir("SharedFiles");
   char final[2000];
   struct dirent *dir;
   if(d){
     while((dir = readdir(d)) != NULL){
       if(dir-> d_type != DT_DIR){
-
+        len = (int)strlen(dir->d_name) +1; 
         strcat(final, dir->d_name);
         strcat(final,"\0");
       }
