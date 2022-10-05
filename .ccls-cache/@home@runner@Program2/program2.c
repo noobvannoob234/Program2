@@ -13,7 +13,7 @@
 #include <ctype.h>
 #include <dirent.h>
 
-char* getDirString(int *len);
+char* getDirString(int *len, int *count);
 int lookup_and_connect(const char *host, const char *service, const char * peerid);
 int main( int argc, char *argv[] )
 {
@@ -70,12 +70,13 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
   printf("DEBUG: connection succes, menu loop next\n"); 
   // Menu loop for registry actions
   
-  char stringid[4]; //hold peerid as a char array 
+  char stringid[5]; //hold peerid as a char array
+  char stringdigi[5]; 
   sprintf(stringid, "%s", peerid); //convert peerid to char array
   char choice[10]; 
   char * msg; 
   char filename[15]; 
-  int size; 
+  int size, count; 
   bool joined = false; 
   bool exit = true; 
   while (exit == false)
@@ -91,6 +92,12 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
     // allocate memory for the msg to send, set the action byte to 0 for join, cat peerid to it, then send
           msg = malloc( sizeof(char) * ( 5 ));
           msg[0] = '0'; //0 for join action
+          digits = 4 - strlen(stringid); 
+          for (int i = 0; i < digits; i++)
+            {
+              msg[i+1] = '0'; //lead the id with zeros depending on # of digits
+            }
+          
           strcat(msg,stringid); //append id 
           if (send(s,msg, 5, 0) < 0)
           {
@@ -105,9 +112,18 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
       else if (strcmp(choice, "PUBLISH") == false)
       {
         if (joined == true)
-        {
-          // do PUBLISH
-          // get all names in SharedFiles
+        { 
+          size = 0;
+          count = 0;
+          char* temp; 
+          temp = getDirString(&size, &count); 
+          // count tracks the # of files.  convert to string and then count the digits, then lead with 0 when addiing to messasge (4 bytes after action).  
+          // msg = malloc 5 + size
+          //msg[0] = 1, msg 1-4 = cont with leading with zeros.  
+          //strcat temp + null as many files as there are in count; 
+          //if (send()<0) {return -1;}
+          free(temp); 
+          //free(msg); 
         }
         // do nothing if not joined
       }
@@ -145,7 +161,7 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
 }
 
 
-char* getDirString(int * len){
+char* getDirString(int *len, int *count){
   DIR *d = opendir("SharedFiles");
   char* final = malloc( sizeof(char) * (  2000 ));
   struct dirent *dir;
@@ -155,6 +171,7 @@ char* getDirString(int * len){
         *len = *len + (int)strlen(dir->d_name) +1; 
         strcat(final, dir->d_name);
         strcat(final,"\0");
+        count++; 
       }
     }
     closedir(d);
