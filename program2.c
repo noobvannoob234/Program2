@@ -12,7 +12,6 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <dirent.h>
-
 char* getDirString(int *len, int *count);
 int lookup_and_connect(const char *host, const char *service, const char * peerid);
 int main( int argc, char *argv[] )
@@ -92,26 +91,27 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
         if (joined == false)
         {
     // allocate memory for the msg to send, set the action byte to 0 for join, cat peerid to it, then send
-          msg = malloc( sizeof(char) * ( 5 ));
+          msg = malloc( sizeof(char) * ( 6 ));
           msg[0] = '0'; //0 for join action
-          digits = 4 - strlen(stringid); 
-          for (int i = 0; i < digits; i++)
+          count = 4 - strlen(stringid); 
+          for (int i = 0; i < count; i++)
             {
               msg[i+1] = '0'; //lead the id with zeros depending on # of digits
             }
-          
+            msg[count+1] = '\0';          
           strcat(msg,stringid); //append id 
           total = 0;
           temp = 0; 
-          while {total < 5}
+          while (total < 5) //send to handle partial send(); 
           {
             temp = send(s,msg,5,0);
             if (temp <0)
             {
-              free msg; 
+              free(msg); 
               return -1; //if error
             }
-          \}
+            total = temp + total; 
+          }
           free(msg); 
           msg = NULL; 
         }
@@ -123,11 +123,20 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
         { 
           size = 0;
           count = 0;
+          char ccount[5];
+          sprintf(ccount, "%s", count)
           char* temp; 
           temp = getDirString(&size, &count); 
           // count tracks the # of files.  convert to string and then count the digits, then lead with 0 when addiing to messasge (4 bytes after action).  
           // msg = malloc 5 + size
-          //msg[0] = 1, msg 1-4 = cont with leading with zeros.  
+          msg = malloc( sizeof(char) * (6+size));
+          msg[0] = 1;
+          for (int i = 0; i < count; i++)
+            {
+              msg[i+1] = '0'; //lead the id with zeros depending on # of digits
+            } 
+          msg[count+1] = '\0';
+          strcat(msg,ccount); ;
           //strcat temp + null as many files as there are in count; 
           //if (send()<0) {return -1;}
           free(temp); 
@@ -144,14 +153,21 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
           p = strchr(filename, '\n' );
           if (p) *p = '\0';
           size = (int) strlen(filename) + 2; // 1 for null term, another 1 byte for action byte; 
-          msg = malloc( sizeof(char) * (  1 + size ));
+          msg = malloc( sizeof(char) * ( size ));
           msg[0] = '2'; 
           strcat(msg, filename);
           msg[size-1] = '\0'; 
-          if (send(s,msg,size, 0) < 0)
+          total = 0;
+          temp = 0; 
+          while {total < size} //send to handle partial send(); 
           {
-            free(msg); 
-            return -1; 
+            temp = send(s,msg,size,0);
+            if (temp <0)
+            {
+              free msg; 
+              return -1; //if error
+            }
+            total = temp + total; 
           }
           free(msg); 
         }
@@ -178,7 +194,8 @@ char* getDirString(int *len, int *count){
       if(dir-> d_type != DT_DIR){
         *len = *len + (int)strlen(dir->d_name) +1; 
         strcat(final, dir->d_name);
-        strcat(final,"\0");
+        strcat(final,"1");
+        final[len] = '\0'
         count++; 
       }
     }
