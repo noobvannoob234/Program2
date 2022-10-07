@@ -76,7 +76,9 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
   char choice[10]; 
   char * msg; 
   char filename[15]; 
-  int size, count; 
+  int size, count;
+  int total = 0,temp = 0; 
+  
   bool joined = false; 
   bool exit = true; 
   while (exit == false)
@@ -99,11 +101,17 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
             }
           
           strcat(msg,stringid); //append id 
-          if (send(s,msg, 5, 0) < 0)
+          total = 0;
+          temp = 0; 
+          while {total < 5}
           {
-            free(msg); 
-            return -1; 
-          }
+            temp = send(s,msg,5,0);
+            if (temp <0)
+            {
+              free msg; 
+              return -1; //if error
+            }
+          \}
           free(msg); 
           msg = NULL; 
         }
