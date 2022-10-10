@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <dirent.h>
+
+#define MAX_PUBLISH_PACKET_SIZE 1200
+
 char* getDirString(int *len, int *count);
 int lookup_and_connect(const char *host, const char *service, const char * peerid);
 int main( int argc, char *argv[] )
@@ -68,53 +71,49 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
   }
   printf("DEBUG: connection succes, menu loop next\n"); 
   // Menu loop for registry actions
-  
-  char stringid[5]; //hold peerid as a char array
-  char stringdigi[5]; 
-  sprintf(stringid, "%s", peerid); //convert peerid to char array
+  uint32_t intid = atoi(peerid);
   char choice[10]; 
-  char * msg; 
-  char filename[15]; 
+  unsigned char * msg; 
+  char filename[100]; 
   int size, count;
-  int total = 0,temp = 0; 
-  
+  int total = 0,tempi = 0; 
+  intid = htonl(intid);   
   bool joined = false; 
-  bool exit = true; 
+  bool exit = false; 
   while (exit == false)
     {
       //get user input and remove newline from that input
       fgets(choice, sizeof(choice), stdin);
       char * p = strchr( choice, '\n' );
       if (p) *p = '\0'; 
+
+      //join command
       if (strcmp(choice, "JOIN") == false)
       {
-        if (joined == false)
-        {
     // allocate memory for the msg to send, set the action byte to 0 for join, cat peerid to it, then send
-          msg = malloc( sizeof(char) * ( 6 ));
-          msg[0] = '0'; //0 for join action
-          count = 4 - strlen(stringid); 
-          for (int i = 0; i < count; i++)
-            {
-              msg[i+1] = '0'; //lead the id with zeros depending on # of digits
-            }
-            msg[count+1] = '\0';          
-          strcat(msg,stringid); //append id 
+          msg = malloc( sizeof(unsigned char) * ( 6 ));
+          msg[0] = 0; //0 for join action
+
+          msg[1] = (intid >> 24) & 0xFF;
+          msg[2] = (intid >> 16) & 0xFF;
+          msg[3] = (intid >> 8) & 0xFF;
+          msg[4] = intid & 0xFF;
+
           total = 0;
-          temp = 0; 
-          while (total < 5) //send to handle partial send(); 
+          tempi = 0; 
+          while (total != 5) //send to handle partial send(); 
           {
-            temp = send(s,msg,5,0);
-            if (temp <0)
+            tempi = send(s,msg,5,0);
+            if (tempi <0)
             {
               free(msg); 
               return -1; //if error
             }
-            total = temp + total; 
+            total = tempi + total;
           }
           free(msg); 
           msg = NULL; 
-        }
+	        joined = true;
         //else do nothing if already joined
       }
       else if (strcmp(choice, "PUBLISH") == false)
@@ -123,27 +122,55 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
         { 
           size = 0;
           count = 0;
-          char ccount[5];
-          sprintf(ccount, "%s", count)
-          char* temp; 
-          temp = getDirString(&size, &count); 
+          unsigned char ccount[5];
+          sprintf(ccount, "%d", count);
+          unsigned char* temp; 
+          printf("before\n");
+          temp = getDirString(&size, &count);
+          printf("after\n");          
+          if(size == -1){
+            printf("WARNING: Too many files, Packet Size will exceede 1200B!");
+              continue;
+          }
           // count tracks the # of files.  convert to string and then count the digits, then lead with 0 when addiing to messasge (4 bytes after action).  
           // msg = malloc 5 + size
-          msg = malloc( sizeof(char) * (6+size));
-          msg[0] = 1;
-          for (int i = 0; i < count; i++)
-            {
-              msg[i+1] = '0'; //lead the id with zeros depending on # of digits
-            } 
-          msg[count+1] = '\0';
-          strcat(msg,ccount); ;
+          msg = malloc( sizeof(unsigned char) * (1200));
+          
+            printf("allocated msg\n");
+          msg[0] = '1';
+          
+            printf("assigning action\n");
+          //unsigned char t = (char)size;
+          memcpy(msg+1,(char *) size, sizeof(size));
+         
+          printf("memcpy size\n");
+          
+          printf("size of integer size: %d\n", sizeof(size));
+          
+          //printf("size of character size: %d\n", sizeof(t));
+          memcpy(msg+1+sizeof(size),temp,size);
           //strcat temp + null as many files as there are in count; 
-          //if (send()<0) {return -1;}
+          
+            printf("memcpy Dir string\n");
+          int totalsentBytes = 0;
+          int sentBytes = 0; 
+          while (totalsentBytes != (int)(sizeof(msg))){ //send to handle partial send(); 
+          
+	          printf("sending loop\n"); 
+            sentBytes = send(s,msg, sizeof(msg),0);
+            if (sentBytes <0) {
+              free(msg); 
+              return -1; //if error
+            }
+            totalsentBytes = sentBytes + totalsentBytes;
+ 	          printf("Total: %d\n", totalsentBytes);  
+          }
           free(temp); 
-          //free(msg); 
+          free(msg); 
         }
         // do nothing if not joined
       }
+      // Search Function.  1 byte + n bytes file name + NULL terminator
       else if (strcmp(choice, "SEARCH") == false)
       {
         if (joined == true)
@@ -152,26 +179,69 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
           fgets(filename, sizeof(filename), stdin);
           p = strchr(filename, '\n' );
           if (p) *p = '\0';
-          size = (int) strlen(filename) + 2; // 1 for null term, another 1 byte for action byte; 
-          msg = malloc( sizeof(char) * ( size ));
-          msg[0] = '2'; 
-          strcat(msg, filename);
-          msg[size-1] = '\0'; 
-          total = 0;
-          temp = 0; 
-          while {total < size} //send to handle partial send(); 
-          {
-            temp = send(s,msg,size,0);
-            if (temp <0)
+          size = (int) strlen(filename) + 2; // 1 byte for action byte; 
+          msg = malloc( sizeof(unsigned char) * ( size ));
+          msg[0] = 2; 
+          for(int i = 0; i < size-2; i++)
             {
-              free msg; 
+              msg[i+1] = filename[i];
+            }       
+          msg[size-1] = '\0'; // should already be null but just in case
+          total = 0;      
+          tempi = 0; 
+          unsigned char buf[10]; 
+          count = 0; 
+          while (total < size) //send to handle partial send(); 
+          { 
+            tempi = send(s,msg,size,0);
+            if (tempi <0)
+            {
+              free(msg); 
               return -1; //if error
             }
-            total = temp + total; 
+            if(count >10)
+            {
+              break; 
+            }
+            count++; 
+            total = tempi + total; 
+          }
+          tempi = recv(s,buf,10,0); 
+          total = 0; 
+          // check if buf is empty
+          for (int i = 0; i < 10; i++)
+            {
+              if(buf[i] !=0)
+              {
+                total = 1; 
+              }
+            }
+          if(total == 1)
+          {
+            uint32_t recid; 
+            // manually assign to uint32_t by position
+        	  recid = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | (buf[3]);
+        	  printf("File found at\n Peer %u\n ", recid);
+            for (int i = 0; i < 4; i++){
+              printf("%u",buf[4+i]);
+              if( i == 3)
+              {
+                printf(":"); 
+              }
+              else{
+                printf("."); 
+              }
+            }
+            // manually assign to uint16_t by position
+            uint16_t recport = (buf[8] << 8) | (buf[9]);
+            printf("%u\n", recport); 
+          } 
+          else{
+            printf("File not indexed by registry\n");
           }
           free(msg); 
         }
-        // nothing happens if not joined
+      // nothing happens if not joined  
       }
       else if (strcmp(choice, "EXIT") == false)
       {
@@ -187,19 +257,27 @@ int lookup_and_connect(const char *host, const char *service, const char * peeri
 
 char* getDirString(int *len, int *count){
   DIR *d = opendir("SharedFiles");
-  char* final = malloc( sizeof(char) * (  2000 ));
+  char* finalS = malloc( sizeof(char) * (  MAX_PUBLISH_PACKET_SIZE-5 ));
   struct dirent *dir;
   if(d){
     while((dir = readdir(d)) != NULL){
       if(dir-> d_type != DT_DIR){
-        *len = *len + (int)strlen(dir->d_name) +1; 
-        strcat(final, dir->d_name);
-        strcat(final,"1");
-        final[len] = '\0'
-        count++; 
+        int currlength = (int)strlen(dir->d_name);
+        //printf("length of string: %d  %s\n", currlength,dir->d_name );
+        if(*len + currlength+1 > MAX_PUBLISH_PACKET_SIZE-5){
+          *len = -1;
+          *count = -1;
+          return finalS;
+        }
+        memcpy(finalS+ (*len), dir->d_name, currlength);
+        *len = *len + currlength;
+        finalS[*len] = '\0';
+        *len = *len +1;
+        *count = *count +1; 
+
       }
     }
     closedir(d);
   }
-  return final;
+  return finalS;
 }

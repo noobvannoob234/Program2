@@ -1,0 +1,8 @@
+	   char test[6];
+	   test[0] == NULL;
+           char testid[4];
+	   int intid = 32; 
+           uint16_t uintid = htons(32);
+           memcpy(test+1, &uintid, sizeof(uint16_t));	   
+	   send(s,test,5,0); 
+	   joined = true;

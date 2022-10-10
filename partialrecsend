@@ -1,0 +1,38 @@
+          while (bytesrec != 10)
+          {
+            memset(buf,0,10);
+            bytesrec = 0; 
+            while (total < size) //send to handle partial send(); 
+            { 
+              temp = send(s,msg,size,0);
+              if (temp <0)
+              {
+                free(msg); 
+                return -1; //if error
+              }
+              if(count >10)
+              {
+                break; 
+              }
+              count++; 
+              total = temp + total; 
+            }
+            total = 0;
+            temp = 1; 
+            while(temp > 0)
+              {
+                temp = recv(s,buf,10,0); 
+                if(temp == -1)
+                {
+                  perror("Error!\n");
+                  return -1; 
+                }
+                bytesrec = temp + bytesrec; 
+              }
+            count++; 
+            if (count >= 20)
+            {
+              printf("partial rec encountered more than 20 times, exiting loop!\n");
+              break;              
+            }
+          }
